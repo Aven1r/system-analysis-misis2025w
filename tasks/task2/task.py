@@ -2,82 +2,90 @@ from math import e, log, log2
 from typing import Dict, List, Tuple
 
 
-def mark_reachable(src: int, node: int, graph: Dict[int, List[int]], reach: List[List[bool]]) -> None:
-    for nxt in graph.get(node, []):
-        if not reach[src - 1][nxt - 1]:
-            reach[src - 1][nxt - 1] = True
-            mark_reachable(src, nxt, graph, reach)
+def dfs(a: int, b: int, adj: Dict[int, List[int]], reach: List[List[bool]]):
+    for c in adj[b]:
+        if not reach[a - 1][c - 1]:
+            reach[a - 1][c - 1] = True
+            dfs(a, c, adj, reach)
 
 
-def build_relations(edges_text: str) -> Tuple[
+def task1(s: str, e: str) -> Tuple[
     List[List[bool]],
     List[List[bool]],
     List[List[bool]],
     List[List[bool]],
     List[List[bool]],
 ]:
-    edges = [tuple(map(int, line.split(","))) for line in edges_text.splitlines() if line.strip()]
+    edges = [tuple(map(int, x.split(","))) for x in s.strip().split("\n")]
     n = max(max(u, v) for u, v in edges)
 
-    direct_parent = [[False] * n for _ in range(n)]
-    graph: Dict[int, List[int]] = {i: [] for i in range(1, n + 1)}
-    parent_of: Dict[int, int] = {}
-
+    dir_parent = [[False] * n for _ in range(n)]
     for u, v in edges:
-        direct_parent[u - 1][v - 1] = True
-        graph[u].append(v)
-        parent_of[v] = u
+        dir_parent[u - 1][v - 1] = True
 
-    direct_child = [[direct_parent[j][i] for j in range(n)] for i in range(n)]
-
-    reach = [[False] * n for _ in range(n)]
-    for v in range(1, n + 1):
-        mark_reachable(v, v, graph, reach)
-
-    indirect_parent = [[False] * n for _ in range(n)]
+    dir_child = [[False] * n for _ in range(n)]
     for i in range(n):
         for j in range(n):
-            if i != j and reach[i][j] and not direct_parent[i][j]:
-                indirect_parent[i][j] = True
+            dir_child[i][j] = dir_parent[j][i]
 
-    indirect_child = [[indirect_parent[j][i] for j in range(n)] for i in range(n)]
+    adj = {i: [] for i in range(1, n + 1)}
+    for u, v in edges:
+        adj[u].append(v)
 
-    co_level = [[False] * n for _ in range(n)]
+    reach = [[False] * n for _ in range(n)]
     for i in range(1, n + 1):
-        pi = parent_of.get(i)
-        if pi is None:
-            continue
-        for j in range(1, n + 1):
-            if i != j and parent_of.get(j) == pi:
-                co_level[i - 1][j - 1] = True
+        dfs(i, i, adj, reach)
 
-    return direct_parent, direct_child, indirect_parent, indirect_child, co_level
-
-
-def compute_entropy(edges_text: str) -> Tuple[float, float]:
-    rels = build_relations(edges_text)
-    n = len(rels[0])
-    k = len(rels)
-
-    total = 0.0
-    denom = (n - 1)
-
+    indir_parent = [[False] * n for _ in range(n)]
     for i in range(n):
-        for r in rels:
-            cnt = sum(r[i])
-            if cnt:
-                p = cnt / denom
-                total += -p * log2(p)
+        for j in range(n):
+            if reach[i][j] and not dir_parent[i][j] and i != j:
+                indir_parent[i][j] = True
 
-    ref = (1 / (e * log(2))) * n * k
-    normalized = total / ref
+    indir_child = [[False] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            indir_child[i][j] = indir_parent[j][i]
 
-    return round(total, 1), round(normalized, 1)
+    co_parent = [[False] * n for _ in range(n)]
+    par = {}
+    for u, v in edges:
+        par[v] = u
+
+    for i in range(1, n + 1):
+        for j in range(1, n + 1):
+            if i != j and i in par and j in par and par[i] == par[j]:
+                co_parent[i - 1][j - 1] = True
+
+    return dir_parent, dir_child, indir_parent, indir_child, co_parent
+
+
+def main(s: str, root: str) -> Tuple[float, float]:
+    dir_parent, dir_child, indir_parent, indir_child, co_parent = task1(s, root)
+
+    relations = [dir_parent, dir_child, indir_parent, indir_child, co_parent]
+    n = len(dir_parent)
+    k = len(relations)
+
+    H_sum = 0.0
+    for j in range(n):
+        for r in relations:
+            lij = sum(1 for val in r[j] if val)
+            if lij > 0:
+                P = lij / (n - 1)
+                H_sum += -P * log2(P)
+
+    c = 1 / (e * log(2))
+    H_ref = c * n * k
+    h = H_sum / H_ref
+
+    return round(H_sum, 1), round(h, 1)
 
 
 if __name__ == "__main__":
     s = "1,2\n1,3\n3,4\n3,5"
-    H, h = compute_entropy(s)
+    root = "1"
+    H, h = main(s, root)
 
     print("Энтропия:", H)
     print("Нормированная сложность:", h)
